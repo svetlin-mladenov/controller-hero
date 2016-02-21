@@ -1,0 +1,186 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+        <title>Controller Hero</title>
+        <script src="//cdn.jsdelivr.net/phaser/2.4.4/phaser.min.js"></script>
+
+        <!-- soundcloud stuff -->
+        <script src="https://connect.soundcloud.com/sdk/sdk-3.0.0.js"></script>
+        <script src="sc.js"></script>
+
+        <script>
+        var game = new Phaser.Game(800, 600, Phaser.AUTO, 'phaser-example', { preload: preload, create: create, update: update, render: render });
+
+        var faceButtons = [];
+        var dpadButtons = [];
+        var dpadButtonCodes = [Phaser.Gamepad.XBOX360_DPAD_LEFT, Phaser.Gamepad.XBOX360_DPAD_RIGHT, Phaser.Gamepad.XBOX360_DPAD_UP, Phaser.Gamepad.XBOX360_DPAD_DOWN];
+        var expectedDpadButtonCode;
+        var faceButtonCodes = [Phaser.Gamepad.XBOX360_A, Phaser.Gamepad.XBOX360_B, Phaser.Gamepad.XBOX360_X, Phaser.Gamepad.XBOX360_Y];
+        var expectedFaceButtonCode;
+        function preload() {
+            //game.load.image('phaser', 'assets/sprites/phaser-dude.png');
+            for (var i of [0, 1, 2, 3]) {
+                faceButtons[i] = 'faceButton' + i;
+                game.load.image(faceButtons[i], 'assets/sprites/gamepad/faceButton' + i + '.png');
+            }
+            for (var dir of ['Left', 'Right', 'Up', 'Down']) {
+                dpadButtons.push('dpad' + dir);
+                game.load.image(dpadButtons[dpadButtons.length - 1], 'assets/sprites/gamepad/dpad' + dir + '.png');
+            }
+            game.load.spritesheet('controller-indicator', 'assets/misc/controller-indicator.png', 16,16);
+        }
+
+        var indicator;
+        var currFaceButtonSprite, currDpadButtonSprite;
+
+        var currFaceButton, currDpadButton;
+        var hits = 0;
+        var misses = 0;
+
+        var hitsText, missesText, percentText;
+
+        var audioVizBmd;
+
+        function create() {
+            game.stage.backgroundColor = '#777777';
+
+            /*for (var i in faceButtons) {
+                game.add.sprite(300 + i*50, 300, faceButtons[i]);
+            }
+            for (var i in dpadButtons) {
+                game.add.sprite(300 + i*50, 400, dpadButtons[i]);
+            }*/
+            currFaceButton = faceButtons[0];
+            expectedFaceButtonCode = faceButtonCodes[0]
+            currDpadButton = dpadButtons[0];
+            expectedDpadButtonCode = dpadButtonCodes[0];
+            createSpritesForCurrButtons();
+
+            game.add.text(60, 60, "Hits:");
+            hitsText = game.add.text(180, 60, "0");
+            game.add.text(60, 90, "Misses:");
+            missesText = game.add.text(180, 90, "0");
+            percentText = game.add.text(250, 70, "0", {font: "40px Arial"});
+
+            //sprite = game.add.sprite(300, 300, 'phaser');
+            //sprite.anchor.setTo(0.5,0.5);
+
+            indicator = game.add.sprite(10,10, 'controller-indicator');
+            indicator.scale.x = indicator.scale.y = 2;
+            indicator.animations.frame = 1;
+
+            game.input.gamepad.start();
+
+            // To listen to buttons from a specific pad listen directly on that pad game.input.gamepad.padX, where X = pad 1-4
+            pad1 = game.input.gamepad.pad1;
+
+            game.input.onDown.add(dump, this);
+
+            audioVizBmd = game.add.bitmapData(game.width, 300);
+
+            game.add.sprite(0, 100, audioVizBmd);
+        }
+
+        function dump() {
+            console.log(pad1._axes[0]);
+            console.log(pad1._rawPad.axes[0]);
+        }
+
+        function createSpritesForCurrButtons() {
+            if (currFaceButtonSprite) {
+                currFaceButtonSprite.destroy();
+            }
+            if (currDpadButtonSprite) {
+                currDpadButtonSprite.destroy();
+            }
+            currFaceButtonSprite = game.add.sprite(450, 300, currFaceButton);
+            currDpadButtonSprite = game.add.sprite(250, 300, currDpadButton);
+        }
+
+        function irandom(low, high) {
+            return Math.floor(Math.random() * (high - low + 1)) + low;
+        }
+
+        var pressed = {};
+
+        function update() {
+            // Pad "connected or not" indicator
+            if (game.input.gamepad.supported && game.input.gamepad.active && pad1.connected)
+            {
+                indicator.animations.frame = 0;
+            }
+            else
+            {
+                indicator.animations.frame = 1;
+            }
+
+            for (var btnCode of dpadButtonCodes) {
+                // Controls
+                if (pad1.isDown(btnCode)) {
+                    if (!pressed[btnCode]) {
+                        pressed[btnCode] = true;
+
+                        if (!currDpadButtonSprite) break;
+                        if (expectedDpadButtonCode === btnCode) {
+                            console.log('correct');
+                            hits++;
+                            currDpadButtonSprite.destroy();
+                            currDpadButtonSprite = null;
+                        } else {
+                            misses++;
+                            console.log('try agains');
+                        }
+                    }
+                } else {
+                    pressed[btnCode] = false;
+                }
+            }
+
+            for (var btnCode of faceButtonCodes) {
+                // Controls
+                if (pad1.isDown(btnCode)) {
+                    if (!pressed[btnCode]) {
+                        pressed[btnCode] = true;
+
+                        if (!currFaceButtonSprite) break;
+                        if (expectedFaceButtonCode === btnCode) {
+                            console.log('correct');
+                            hits++;
+                            currFaceButtonSprite.destroy();
+                            currFaceButtonSprite = null;
+                        } else {
+                            misses++;
+                            console.log('try again');
+                        }
+                    }
+                } else {
+                    pressed[btnCode] = false;
+                }
+            }
+
+            if (!currDpadButtonSprite && !currFaceButtonSprite) {
+                var idx = irandom(0, dpadButtons.length -1);
+                currDpadButton = dpadButtons[idx];
+                createSpritesForCurrButtons();
+                expectedDpadButtonCode = dpadButtonCodes[idx];
+
+                var idx = irandom(0, faceButtons.length -1);
+                currFaceButton = faceButtons[idx];
+                createSpritesForCurrButtons();
+                expectedFaceButtonCode = faceButtonCodes[idx];
+            }
+
+            hitsText.text = hits;
+            missesText.text = misses;
+            var percent = hits ? hits / (hits + misses) : 0;
+            percentText.text = (100 * percent).toFixed(1) + '%';
+        }
+
+        function render() {
+            // game.debug.text(pad1)
+        }
+        </script>
+    </head>
+    <body>
+    </body>
+</html>
